@@ -1,0 +1,186 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: ai
+    description: Server-side proxied AI tiers (keys never leave the server)
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /status:
+    get:
+      operationId: aiStatus
+      tags: [ai]
+      summary: AI tier configuration status
+      description: Reports whether Tier 2 / Tier 3 providers are configured server-side, without exposing keys
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiStatus"
+  /parse:
+    post:
+      operationId: parseTransaction
+      tags: [ai]
+      summary: Tier 2 — OpenRouter transaction parsing
+      description: Parses free-text transaction input into structured fields using OpenRouter (Llama 3.3 70B)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ParseRequest"
+      responses:
+        "200":
+          description: Parsed transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ParseResult"
+        "400":
+          description: Invalid request body
+        "502":
+          description: Upstream provider error
+        "503":
+          description: Tier 2 not configured on this server
+  /audit:
+    post:
+      operationId: runAudit
+      tags: [ai]
+      summary: Tier 3 — Gemini deep financial audit
+      description: Generates a strategic financial audit from a weekly summary using Gemini 2.5 Flash
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PeriodSummary"
+      responses:
+        "200":
+          description: Audit text
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditResult"
+        "400":
+          description: Invalid request body
+        "503":
+          description: Tier 3 not configured on this server
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    AiStatus:
+      type: object
+      properties:
+        tier2Configured:
+          type: boolean
+        tier3Configured:
+          type: boolean
+      required:
+        - tier2Configured
+        - tier3Configured
+    ParseRequest:
+      type: object
+      properties:
+        userInput:
+          type: string
+        categories:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+            required: [id, name]
+      required:
+        - userInput
+        - categories
+    ParseResult:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [CREDIT, DEBIT]
+        amount:
+          type: number
+        categoryId:
+          type: string
+        description:
+          type: string
+        confidence:
+          type: number
+      required:
+        - type
+        - amount
+        - categoryId
+        - description
+        - confidence
+    PeriodSummary:
+      type: object
+      properties:
+        period:
+          type: string
+          enum: [WEEKLY, MONTHLY, QUARTERLY, HALF_YEARLY, YEARLY]
+        totalBalance:
+          type: number
+        periodIncome:
+          type: number
+        periodExpenses:
+          type: number
+        topCategories:
+          type: array
+          items:
+            type: object
+        activeGoals:
+          type: array
+          items:
+            type: object
+        budgetAlerts:
+          type: array
+          items:
+            type: object
+      required:
+        - period
+        - totalBalance
+        - periodIncome
+        - periodExpenses
+        - topCategories
+        - activeGoals
+        - budgetAlerts
+    AuditResult:
+      type: object
+      properties:
+        text:
+          type: string
+      required:
+        - text
+
