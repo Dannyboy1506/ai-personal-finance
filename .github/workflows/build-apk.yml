@@ -46,8 +46,18 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: echo "PNPM_STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_ENV"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.PNPM_STORE_PATH }}
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            pnpm-store-${{ runner.os }}-
 
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
@@ -84,31 +94,9 @@ jobs:
         working-directory: artifacts/fintech-app/android
         run: chmod +x ./gradlew
 
-      # Debug builds are signed automatically with Android's built-in debug
-      # key, so this needs zero secrets and the .apk installs immediately via
-      # `adb install` or by opening it on-device. See the commented section
-      # below for how to switch to a signed release build once you have a
-      # real keystore.
       - name: Build debug APK
         working-directory: artifacts/fintech-app/android
         run: ./gradlew assembleDebug --no-daemon
-
-      # ── OPTIONAL: signed release build ─────────────────────────────────────
-      # Uncomment once you've generated a real keystore (`keytool -genkeypair
-      # ...`) and added these as repository secrets. Never commit a keystore
-      # file to the repo.
-      #
-      # - name: Decode signing keystore
-      #   working-directory: artifacts/fintech-app/android
-      #   run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > app/release.keystore
-      #
-      # - name: Build signed release APK
-      #   working-directory: artifacts/fintech-app/android
-      #   env:
-      #     ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-      #     ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-      #     ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-      #   run: ./gradlew assembleRelease --no-daemon
 
       - name: Locate APK and write summary
         working-directory: artifacts/fintech-app/android
