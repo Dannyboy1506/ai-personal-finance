@@ -12,6 +12,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { Feather } from '@expo/vector-icons';
 import { reloadAppAsync } from 'expo';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import { formatCrashLogText } from '@/utils/crashLog';
 
 export type ErrorFallbackProps = {
   error: Error;
@@ -23,6 +26,7 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
   const insets = useSafeAreaInsets();
 
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   const handleRestart = async () => {
     try {
@@ -41,6 +45,25 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
     return details;
   };
 
+  const handleShare = async () => {
+    setSharing(true);
+    try {
+      const log = await formatCrashLogText();
+      const text = `${formatErrorDetails()}\n\n=== Recent error log (this device) ===\n\n${log}`;
+      const fileUri = `${FileSystem.cacheDirectory}crash-report-${Date.now()}.txt`;
+      await FileSystem.writeAsStringAsync(fileUri, text, { encoding: FileSystem.EncodingType.UTF8 });
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri, { mimeType: 'text/plain', dialogTitle: 'Share crash report' });
+      }
+    } catch {
+      // Sharing is a nice-to-have here — if it fails, the on-screen text is
+      // still visible and selectable, so nothing is lost.
+    } finally {
+      setSharing(false);
+    }
+  };
+
   const monoFont = Platform.select({
     ios: 'Menlo',
     android: 'monospace',
@@ -49,23 +72,21 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {__DEV__ ? (
-        <Pressable
-          onPress={() => setIsModalVisible(true)}
-          accessibilityLabel="View error details"
-          accessibilityRole="button"
-          style={({ pressed }) => [
-            styles.topButton,
-            {
-              top: insets.top + 16,
-              backgroundColor: colors.card,
-              opacity: pressed ? 0.8 : 1,
-            },
-          ]}
-        >
-          <Feather name="alert-circle" size={20} color={colors.foreground} />
-        </Pressable>
-      ) : null}
+      <Pressable
+        onPress={() => setIsModalVisible(true)}
+        accessibilityLabel="View error details"
+        accessibilityRole="button"
+        style={({ pressed }) => [
+          styles.topButton,
+          {
+            top: insets.top + 16,
+            backgroundColor: colors.card,
+            opacity: pressed ? 0.8 : 1,
+          },
+        ]}
+      >
+        <Feather name="alert-circle" size={20} color={colors.foreground} />
+      </Pressable>
 
       <View style={styles.content}>
         <Text style={[styles.title, { color: colors.foreground }]}>
@@ -93,76 +114,100 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
             Try Again
           </Text>
         </Pressable>
+
+        <Pressable onPress={() => setIsModalVisible(true)} hitSlop={8}>
+          <Text style={[styles.detailsLink, { color: colors.mutedForeground }]}>
+            View error details
+          </Text>
+        </Pressable>
       </View>
 
-      {__DEV__ ? (
-        <Modal
-          visible={isModalVisible}
-          animationType="slide"
-          transparent={true}
-          onRequestClose={() => setIsModalVisible(false)}
-        >
-          <View style={styles.modalOverlay}>
+      <Modal
+        visible={isModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalContainer,
+              { backgroundColor: colors.background },
+            ]}
+          >
             <View
               style={[
-                styles.modalContainer,
-                { backgroundColor: colors.background },
+                styles.modalHeader,
+                { borderBottomColor: colors.border },
               ]}
+            >
+              <Text style={[styles.modalTitle, { color: colors.foreground }]}>
+                Error Details
+              </Text>
+              <Pressable
+                onPress={() => setIsModalVisible(false)}
+                accessibilityLabel="Close error details"
+                accessibilityRole="button"
+                style={({ pressed }) => [
+                  styles.closeButton,
+                  { opacity: pressed ? 0.6 : 1 },
+                ]}
+              >
+                <Feather name="x" size={24} color={colors.foreground} />
+              </Pressable>
+            </View>
+
+            <ScrollView
+              style={styles.modalScrollView}
+              contentContainerStyle={[
+                styles.modalScrollContent,
+                { paddingBottom: insets.bottom + 16 },
+              ]}
+              showsVerticalScrollIndicator
             >
               <View
                 style={[
-                  styles.modalHeader,
-                  { borderBottomColor: colors.border },
+                  styles.errorContainer,
+                  { backgroundColor: colors.card },
                 ]}
               >
-                <Text style={[styles.modalTitle, { color: colors.foreground }]}>
-                  Error Details
-                </Text>
-                <Pressable
-                  onPress={() => setIsModalVisible(false)}
-                  accessibilityLabel="Close error details"
-                  accessibilityRole="button"
-                  style={({ pressed }) => [
-                    styles.closeButton,
-                    { opacity: pressed ? 0.6 : 1 },
-                  ]}
-                >
-                  <Feather name="x" size={24} color={colors.foreground} />
-                </Pressable>
-              </View>
-
-              <ScrollView
-                style={styles.modalScrollView}
-                contentContainerStyle={[
-                  styles.modalScrollContent,
-                  { paddingBottom: insets.bottom + 16 },
-                ]}
-                showsVerticalScrollIndicator
-              >
-                <View
+                <Text
                   style={[
-                    styles.errorContainer,
-                    { backgroundColor: colors.card },
+                    styles.errorText,
+                    {
+                      color: colors.foreground,
+                      fontFamily: monoFont,
+                    },
                   ]}
+                  selectable
                 >
-                  <Text
-                    style={[
-                      styles.errorText,
-                      {
-                        color: colors.foreground,
-                        fontFamily: monoFont,
-                      },
-                    ]}
-                    selectable
-                  >
-                    {formatErrorDetails()}
-                  </Text>
-                </View>
-              </ScrollView>
+                  {formatErrorDetails()}
+                </Text>
+              </View>
+            </ScrollView>
+
+            <View style={[styles.modalFooter, { borderTopColor: colors.border }]}>
+              <Pressable
+                onPress={handleShare}
+                disabled={sharing}
+                style={({ pressed }) => [
+                  styles.shareButton,
+                  {
+                    backgroundColor: colors.primary + '20',
+                    borderColor: colors.primary + '50',
+                    opacity: pressed || sharing ? 0.7 : 1,
+                  },
+                ]}
+              >
+                <Feather name="share" size={15} color={colors.primary} />
+                <Text style={[styles.shareButtonText, { color: colors.primary }]}>
+                  {sharing ? 'Preparing…' : 'Share crash report'}
+                </Text>
+              </Pressable>
             </View>
           </View>
-        </Modal>
-      ) : null}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -193,6 +238,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     lineHeight: 24,
+  },
+  detailsLink: {
+    fontSize: 13,
+    textDecorationLine: 'underline',
+    marginTop: 4,
   },
   topButton: {
     position: 'absolute',
@@ -270,5 +320,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     width: '100%',
+  },
+  modalFooter: {
+    padding: 16,
+    borderTopWidth: 1,
+  },
+  shareButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  shareButtonText: {
+    fontSize: 14,
+    fontFamily: 'Inter_600SemiBold',
   },
 });

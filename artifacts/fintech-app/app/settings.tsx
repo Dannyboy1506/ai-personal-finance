@@ -18,6 +18,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { useColors } from '@/hooks/useColors';
 import { useFinance } from '@/context/FinanceContext';
 import { getApiBaseUrl } from '@/services/apiConfig';
+import { getCrashLog, clearCrashLog, formatCrashLogText } from '@/utils/crashLog';
 
 function SettingRow({
   icon,
@@ -61,6 +62,8 @@ export default function SettingsScreen() {
   const [aiStatus, setAiStatus] = useState<AiStatus>('loading');
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [logCount, setLogCount] = useState<number | null>(null);
+  const [sharingLog, setSharingLog] = useState(false);
 
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
   const bottomPad = Platform.OS === 'web' ? 34 : insets.bottom;
@@ -143,6 +146,42 @@ export default function SettingsScreen() {
         },
       ],
     );
+  };
+
+  useEffect(() => {
+    getCrashLog().then((entries) => setLogCount(entries.length));
+  }, []);
+
+  const handleShareLog = async () => {
+    setSharingLog(true);
+    try {
+      const text = await formatCrashLogText();
+      const fileUri = `${FileSystem.cacheDirectory}debug-log-${Date.now()}.txt`;
+      await FileSystem.writeAsStringAsync(fileUri, text, { encoding: FileSystem.EncodingType.UTF8 });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri, { mimeType: 'text/plain', dialogTitle: 'Share debug log' });
+      } else {
+        Alert.alert('Sharing unavailable', 'Sharing is not available on this device.');
+      }
+    } catch {
+      Alert.alert('Failed', 'Could not prepare the debug log.');
+    } finally {
+      setSharingLog(false);
+    }
+  };
+
+  const handleClearLog = () => {
+    Alert.alert('Clear debug log?', 'This removes the logged errors from this device.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Clear',
+        style: 'destructive',
+        onPress: async () => {
+          await clearCrashLog();
+          setLogCount(0);
+        },
+      },
+    ]);
   };
 
   return (
@@ -243,6 +282,39 @@ export default function SettingsScreen() {
                 <Feather name="download" size={15} color={colors.warning} />
               )}
               <Text style={[styles.backupBtnText, { color: colors.warning }]}>Restore backup</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Debug Log */}
+        <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>DEBUG LOG</Text>
+          <Text style={[styles.backupHint, { color: colors.mutedForeground }]}>
+            {logCount === null
+              ? 'Checking…'
+              : logCount === 0
+                ? 'No errors logged on this device.'
+                : `${logCount} error${logCount > 1 ? 's' : ''} logged. Kept locally, capped at the most recent 20.`}
+          </Text>
+          <View style={styles.backupButtons}>
+            <TouchableOpacity
+              onPress={handleShareLog}
+              disabled={sharingLog}
+              style={[styles.backupBtn, { backgroundColor: colors.primary + '15', borderColor: colors.primary + '40' }]}
+            >
+              {sharingLog ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Feather name="share" size={15} color={colors.primary} />
+              )}
+              <Text style={[styles.backupBtnText, { color: colors.primary }]}>Share log</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleClearLog}
+              style={[styles.backupBtn, { backgroundColor: colors.debit + '15', borderColor: colors.debit + '40' }]}
+            >
+              <Feather name="trash-2" size={15} color={colors.debit} />
+              <Text style={[styles.backupBtnText, { color: colors.debit }]}>Clear log</Text>
             </TouchableOpacity>
           </View>
         </View>
