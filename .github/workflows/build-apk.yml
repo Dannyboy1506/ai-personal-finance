@@ -108,47 +108,70 @@ jobs:
         working-directory: artifacts/fintech-app/android
         run: chmod +x ./gradlew
 
-      # Debug builds are signed automatically with Android's built-in debug
-      # key, so this needs zero secrets and the .apk installs immediately via
-      # `adb install` or by opening it on-device. See the commented section
-      # below for how to switch to a signed release build once you have a
-      # real keystore.
-      - name: Build debug APK
-        working-directory: artifacts/fintech-app/android
-        run: ./gradlew assembleDebug --no-daemon
+      # Ensure a debug keystore exists explicitly rather than relying on
+      # implicit auto-generation. With no release signing configured (see
+      # below), Expo's generated build.gradle falls back to this same
+      # keystore for the release build type — so this is what makes
+      # assembleRelease produce an installable APK with zero secrets.
+      - name: Ensure debug keystore exists
+        run: |
+          mkdir -p ~/.android
+          if [ ! -f ~/.android/debug.keystore ]; then
+            keytool -genkeypair -v -keystore ~/.android/debug.keystore \
+              -storepass android -alias androiddebugkey -keypass android \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
 
-      # ── OPTIONAL: signed release build ─────────────────────────────────────
+      # IMPORTANT: assembleDebug is intentionally NOT used here. React
+      # Native's debug build type defaults to loading JS from a live Metro
+      # server on localhost:8081 instead of bundling it into the APK — fine
+      # for local development with a cable and `expo start`, useless for a
+      # standalone APK built in CI with no dev server anywhere nearby (this
+      # is exactly what caused every install to hang on the splash screen,
+      # regardless of any JS-level fix — no JS was ever loading at all).
+      # assembleRelease bundles the JS directly by default. It still needs
+      # signing to be installable; with no real keystore configured (see the
+      # optional block below), it falls back to the debug keystore ensured
+      # above — self-signed, fine for side-loading, not Play Store-ready.
+      - name: Build release APK
+        working-directory: artifacts/fintech-app/android
+        run: ./gradlew assembleRelease --no-daemon
+
+      # ── OPTIONAL: real release signing ──────────────────────────────────────
       # Uncomment once you've generated a real keystore (`keytool -genkeypair
       # ...`) and added these as repository secrets. Never commit a keystore
-      # file to the repo.
+      # file to the repo. With this in place, assembleRelease above will use
+      # it instead of falling back to the debug keystore.
       #
       # - name: Decode signing keystore
       #   working-directory: artifacts/fintech-app/android
       #   run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > app/release.keystore
       #
-      # - name: Build signed release APK
+      # - name: Configure release signing
       #   working-directory: artifacts/fintech-app/android
       #   env:
       #     ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       #     ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
       #     ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-      #   run: ./gradlew assembleRelease --no-daemon
+      #   run: echo "Wire these into app/build.gradle's signingConfigs.release block"
 
       - name: Locate APK and write summary
         working-directory: artifacts/fintech-app/android
         run: |
-          APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
+          APK_PATH="app/build/outputs/apk/release/app-release.apk"
           SIZE=$(du -h "$APK_PATH" | cut -f1)
           echo "### 📦 Build complete" >> "$GITHUB_STEP_SUMMARY"
           echo "- **APK:** \`$APK_PATH\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Size:** $SIZE" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Signing:** debug key (side-load only, not Play Store-ready)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Signing:** debug keystore fallback (side-load only, not Play Store-ready)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **JS bundle:** embedded (production mode, no Metro/dev server needed)" >> "$GITHUB_STEP_SUMMARY"
           echo "Download it from this run's **Artifacts** section above." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: fintech-app-debug-apk
-          path: artifacts/fintech-app/android/app/build/outputs/apk/debug/app-debug.apk
+          name: fintech-app-release-apk
+          path: artifacts/fintech-app/android/app/build/outputs/apk/release/app-release.apk
           retention-days: 30
           if-no-files-found: error
