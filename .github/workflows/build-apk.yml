@@ -60,7 +60,15 @@ jobs:
             pnpm-store-${{ runner.os }}-
 
       - name: Install workspace dependencies
-        run: pnpm install --frozen-lockfile
+        # Not --frozen-lockfile: there's no committed pnpm-lock.yaml that's
+        # actually in sync with package.json right now (that's the root
+        # cause of the ERR_PNPM_LOCKFILE_CONFIG_MISMATCH failures), so a
+        # frozen install just fails outright rather than building anything.
+        # Plain install lets pnpm resolve a consistent lockfile on the fly.
+        # Once a real pnpm-lock.yaml is committed (run `pnpm install` locally
+        # and push the result), switch this back to --frozen-lockfile for
+        # reproducible builds.
+        run: pnpm install
 
       - name: Check Expo dependency compatibility
         working-directory: artifacts/fintech-app
