@@ -10,6 +10,7 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { formatCurrencyAbs } from '@/utils/currency';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { useFinance } from '@/context/FinanceContext';
@@ -55,8 +56,8 @@ function GoalRow({ goal, pacing }: { goal: Goal; pacing: 'on-track' | 'behind' |
 
       <View style={styles.goalFooter}>
         <Text style={[styles.amounts, { color: colors.foreground }]}>
-          <Text style={{ color: pc }}>${goal.currentAmount.toLocaleString()}</Text>
-          <Text style={{ color: colors.mutedForeground }}> / ${goal.targetAmount.toLocaleString()}</Text>
+          <Text style={{ color: pc }}>{formatCurrencyAbs(goal.currentAmount)}</Text>
+          <Text style={{ color: colors.mutedForeground }}> / {formatCurrencyAbs(goal.targetAmount)}</Text>
         </Text>
         <View style={styles.daysRow}>
           <Feather name="calendar" size={12} color={colors.mutedForeground} />
@@ -71,7 +72,7 @@ function GoalRow({ goal, pacing }: { goal: Goal; pacing: 'on-track' | 'behind' |
         <View style={[styles.rateRow, { backgroundColor: colors.muted }]}>
           <Feather name="trending-up" size={12} color={colors.mutedForeground} />
           <Text style={[styles.rateText, { color: colors.mutedForeground }]}>
-            Need ${(((goal.targetAmount - goal.currentAmount) / days)).toFixed(2)}/day to reach goal
+            Need {formatCurrencyAbs((goal.targetAmount - goal.currentAmount) / days)}/day to reach goal
           </Text>
         </View>
       )}

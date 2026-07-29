@@ -9,6 +9,7 @@ import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import type { Transaction, Category } from '@/context/FinanceContext';
 import { CategoryPickerModal } from '@/components/CategoryPickerModal';
+import { formatCurrencyAbs } from '@/utils/currency';
 
 interface TransactionCardProps {
   transaction: Transaction;
@@ -144,7 +145,7 @@ export function TransactionCard({
         <View style={styles.right}>
           <View style={[styles.dot, { backgroundColor: dotColor }]} />
           <Text style={[styles.amount, { color: amountColor }]}>
-            {isCredit ? '+' : '-'}${transaction.amount.toFixed(2)}
+            {isCredit ? '+' : '-'}{formatCurrencyAbs(transaction.amount)}
           </Text>
         </View>
       </TouchableOpacity>

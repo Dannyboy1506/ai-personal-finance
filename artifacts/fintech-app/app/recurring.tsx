@@ -16,6 +16,7 @@ import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { useFinance, type RecurringRule } from '@/context/FinanceContext';
+import { formatCurrencyAbs } from '@/utils/currency';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -53,7 +54,7 @@ function RuleRow({
           </Text>
         </View>
         <Text style={[styles.ruleAmount, { color: isCredit ? colors.credit : colors.debit }]}>
-          {isCredit ? '+' : '-'}${rule.amount.toFixed(2)}
+          {isCredit ? '+' : '-'}{formatCurrencyAbs(rule.amount)}
         </Text>
       </View>
 
@@ -224,7 +225,7 @@ export default function RecurringScreen() {
             <View style={styles.field}>
               <Text style={[styles.label, { color: colors.mutedForeground }]}>Amount</Text>
               <View style={[styles.amountRow, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                <Text style={[styles.currency, { color: colors.mutedForeground }]}>$</Text>
+                <Text style={[styles.currency, { color: colors.mutedForeground }]}>₦</Text>
                 <TextInput
                   value={amount}
                   onChangeText={setAmount}

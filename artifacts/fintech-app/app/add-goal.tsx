@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   Platform,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -14,6 +15,12 @@ import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { useFinance } from '@/context/FinanceContext';
+import { DatePickerModal } from '@/components/DatePickerModal';
+import { CURRENCY_SYMBOL } from '@/utils/currency';
+
+function formatDateLabel(iso: string): string {
+  return new Date(iso).toLocaleDateString([], { year: 'numeric', month: 'long', day: 'numeric' });
+}
 
 export default function AddGoalScreen() {
   const colors = useColors();
@@ -22,8 +29,10 @@ export default function AddGoalScreen() {
 
   const [name, setName] = useState('');
   const [targetAmount, setTargetAmount] = useState('');
-  const [targetDate, setTargetDate] = useState('');
+  const [targetDate, setTargetDate] = useState(''); // ISO string once picked
   const [currentAmount, setCurrentAmount] = useState('');
+  const [isLocked, setIsLocked] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [error, setError] = useState('');
 
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
@@ -35,8 +44,7 @@ export default function AddGoalScreen() {
 
     if (!name.trim()) { setError('Please enter a goal name'); return; }
     if (!target || target <= 0) { setError('Please enter a valid target amount'); return; }
-    if (!targetDate) { setError('Please enter a target date (YYYY-MM-DD)'); return; }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) { setError('Date format should be YYYY-MM-DD'); return; }
+    if (!targetDate) { setError('Please pick a target date'); return; }
 
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
@@ -44,7 +52,8 @@ export default function AddGoalScreen() {
       name: name.trim(),
       targetAmount: target,
       currentAmount: current,
-      targetDate: new Date(targetDate).toISOString(),
+      targetDate,
+      isLocked,
     });
 
     router.back();
@@ -74,7 +83,7 @@ export default function AddGoalScreen() {
           <TextInput
             value={name}
             onChangeText={setName}
-            placeholder='e.g. "Emergency Fund" or "Tokyo Trip"'
+            placeholder='e.g. "Emergency Fund" or "Lagos Trip"'
             placeholderTextColor={colors.mutedForeground}
             style={[styles.input, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border }]}
           />
@@ -84,11 +93,11 @@ export default function AddGoalScreen() {
         <View style={styles.field}>
           <Text style={[styles.label, { color: colors.mutedForeground }]}>Target Amount</Text>
           <View style={[styles.amountRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.currency, { color: colors.mutedForeground }]}>$</Text>
+            <Text style={[styles.currency, { color: colors.mutedForeground }]}>{CURRENCY_SYMBOL}</Text>
             <TextInput
               value={targetAmount}
               onChangeText={setTargetAmount}
-              placeholder="5,000"
+              placeholder="500,000"
               placeholderTextColor={colors.mutedForeground}
               keyboardType="decimal-pad"
               style={[styles.amountInput, { color: colors.credit }]}
@@ -100,7 +109,7 @@ export default function AddGoalScreen() {
         <View style={styles.field}>
           <Text style={[styles.label, { color: colors.mutedForeground }]}>Current Amount (optional)</Text>
           <View style={[styles.amountRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.currency, { color: colors.mutedForeground }]}>$</Text>
+            <Text style={[styles.currency, { color: colors.mutedForeground }]}>{CURRENCY_SYMBOL}</Text>
             <TextInput
               value={currentAmount}
               onChangeText={setCurrentAmount}
@@ -112,16 +121,36 @@ export default function AddGoalScreen() {
           </View>
         </View>
 
-        {/* Target Date */}
+        {/* Target Date — now a calendar picker, not free text */}
         <View style={styles.field}>
           <Text style={[styles.label, { color: colors.mutedForeground }]}>Target Date</Text>
-          <TextInput
-            value={targetDate}
-            onChangeText={setTargetDate}
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor={colors.mutedForeground}
-            style={[styles.input, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border }]}
-          />
+          <TouchableOpacity
+            onPress={() => setShowDatePicker(true)}
+            style={[styles.input, styles.dateRow, { backgroundColor: colors.card, borderColor: colors.border }]}
+          >
+            <Text style={{ color: targetDate ? colors.foreground : colors.mutedForeground, fontSize: 15, fontFamily: 'Inter_400Regular' }}>
+              {targetDate ? formatDateLabel(targetDate) : 'Select a date'}
+            </Text>
+            <Feather name="calendar" size={18} color={colors.mutedForeground} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Locked savings toggle */}
+        <View style={[styles.lockCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={styles.lockRow}>
+            <View style={styles.lockTextGroup}>
+              <Text style={[styles.lockTitle, { color: colors.foreground }]}>Lock this savings</Text>
+              <Text style={[styles.lockSubtitle, { color: colors.mutedForeground }]}>
+                Money set aside here won't count toward your available balance on the dashboard — only your total balance, if you choose to view it.
+              </Text>
+            </View>
+            <Switch
+              value={isLocked}
+              onValueChange={setIsLocked}
+              trackColor={{ false: colors.border, true: colors.warning + '80' }}
+              thumbColor={isLocked ? colors.warning : colors.mutedForeground}
+            />
+          </View>
         </View>
 
         {error ? (
@@ -139,6 +168,14 @@ export default function AddGoalScreen() {
           <Text style={[styles.saveBtnText, { color: colors.primaryForeground }]}>Create Goal</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <DatePickerModal
+        visible={showDatePicker}
+        value={targetDate || undefined}
+        minDate={new Date()}
+        onSelect={setTargetDate}
+        onClose={() => setShowDatePicker(false)}
+      />
     </View>
   );
 }
@@ -160,9 +197,15 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: 'Inter_400Regular',
   },
+  dateRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   amountRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, borderRadius: 12, borderWidth: 1 },
   currency: { fontSize: 20, fontFamily: 'Inter_600SemiBold', marginRight: 4 },
   amountInput: { flex: 1, fontSize: 24, fontFamily: 'Inter_700Bold', paddingVertical: 12 },
+  lockCard: { borderRadius: 14, borderWidth: 1, padding: 16 },
+  lockRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  lockTextGroup: { flex: 1, gap: 4 },
+  lockTitle: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
+  lockSubtitle: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 17 },
   errorRow: {
     flexDirection: 'row',
     alignItems: 'center',

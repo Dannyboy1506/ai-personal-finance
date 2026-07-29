@@ -1,14 +1,14 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withTiming,
-  useEffect,
 } from 'react-native-reanimated';
 import { useColors } from '@/hooks/useColors';
 import type { Budget, Category } from '@/context/FinanceContext';
+import { formatCurrencyAbs } from '@/utils/currency';
 
 interface BudgetCardProps {
   budget: Budget;
@@ -67,7 +67,7 @@ export function BudgetCard({ budget, category, spent }: BudgetCardProps) {
             {category?.name ?? 'Unknown'}
           </Text>
           <Text style={[styles.limit, { color: colors.mutedForeground }]}>
-            ${spent.toFixed(2)} / ${budget.monthlyLimit.toFixed(2)}
+            {formatCurrencyAbs(spent)} / {formatCurrencyAbs(budget.monthlyLimit)}
           </Text>
         </View>
         <Text style={[styles.pct, { color: barColor }]}>{pct}%</Text>

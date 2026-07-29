@@ -55,6 +55,7 @@ export interface Goal {
   targetAmount: number;
   currentAmount: number;
   targetDate: string; // ISO date string
+  isLocked?: boolean; // if true, currentAmount is excluded from getSpendableBalance()
   isDeleted: boolean;
   createdAt: string;
 }
@@ -170,6 +171,8 @@ interface FinanceContextValue {
   importAllData: (json: string) => Promise<{ success: boolean; error?: string }>;
   // Analytics helpers
   getTotalBalance: () => number;
+  getSpendableBalance: () => number;
+  getLockedSavingsTotal: () => number;
   getMonthlyStats: () => { income: number; expenses: number };
   getBudgetSpent: (categoryId: string) => number;
   getGoalPacing: (goal: Goal) => GoalPacing;
@@ -779,6 +782,23 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       .reduce((sum, a) => sum + a.balance, 0);
   }, [accounts]);
 
+  /** Sum of currentAmount across all active goals marked isLocked. */
+  const getLockedSavingsTotal = useCallback(() => {
+    return goals
+      .filter((g) => !g.isDeleted && g.isLocked)
+      .reduce((sum, g) => sum + g.currentAmount, 0);
+  }, [goals]);
+
+  /**
+   * Total balance minus money set aside in locked goals — this is the
+   * "what can I actually spend" number, meant as the default/primary balance
+   * shown on the dashboard. getTotalBalance() remains the true, unadjusted
+   * total (including locked funds) for whenever the user wants to see it.
+   */
+  const getSpendableBalance = useCallback(() => {
+    return getTotalBalance() - getLockedSavingsTotal();
+  }, [getTotalBalance, getLockedSavingsTotal]);
+
   const getMonthlyStats = useCallback(() => {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
@@ -980,6 +1000,8 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         exportAllData,
         importAllData,
         getTotalBalance,
+        getSpendableBalance,
+        getLockedSavingsTotal,
         getMonthlyStats,
         getBudgetSpent,
         getGoalPacing,

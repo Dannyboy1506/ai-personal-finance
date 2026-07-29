@@ -1,14 +1,14 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withTiming,
-  useEffect,
 } from 'react-native-reanimated';
 import { useColors } from '@/hooks/useColors';
 import type { Goal, GoalPacing } from '@/context/FinanceContext';
+import { formatCurrencyAbs } from '@/utils/currency';
 
 interface GoalCardProps {
   goal: Goal;
@@ -75,9 +75,9 @@ export function GoalCard({ goal, pacing }: GoalCardProps) {
       {/* Amounts + days */}
       <View style={styles.footer}>
         <Text style={[styles.amounts, { color: colors.foreground }]}>
-          <Text style={{ color: pacingColor }}>${goal.currentAmount.toLocaleString()}</Text>
+          <Text style={{ color: pacingColor }}>{formatCurrencyAbs(goal.currentAmount)}</Text>
           <Text style={{ color: colors.mutedForeground }}>
-            {' / '}${goal.targetAmount.toLocaleString()}
+            {' / '}{formatCurrencyAbs(goal.targetAmount)}
           </Text>
         </Text>
         <Text style={[styles.days, { color: colors.mutedForeground }]}>

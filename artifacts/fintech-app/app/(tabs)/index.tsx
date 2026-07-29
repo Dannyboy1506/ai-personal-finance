@@ -22,6 +22,7 @@ import { TransactionCard } from '@/components/TransactionCard';
 import { GoalCard } from '@/components/GoalCard';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { runGeminiAudit } from '@/services/tier3Service';
+import { formatCurrencyAbs } from '@/utils/currency';
 
 export default function DashboardScreen() {
   const colors = useColors();
@@ -31,6 +32,8 @@ export default function DashboardScreen() {
     isOffline,
     syncQueue,
     getTotalBalance,
+    getSpendableBalance,
+    getLockedSavingsTotal,
     getMonthlyStats,
     getRecentTransactions,
     getCategoryById,
@@ -49,7 +52,11 @@ export default function DashboardScreen() {
   const [auditText, setAuditText] = useState<string | null>(null);
   const [auditLoading, setAuditLoading] = useState(false);
 
-  const balance = getTotalBalance();
+  const [showTotalBalance, setShowTotalBalance] = useState(false);
+  const spendable = getSpendableBalance();
+  const total = getTotalBalance();
+  const locked = getLockedSavingsTotal();
+  const balance = showTotalBalance ? total : spendable;
   const { income, expenses } = getMonthlyStats();
   const recentTxs = getRecentTransactions(7);
   const activeGoals = goals.filter((g) => !g.isDeleted);
@@ -139,18 +146,30 @@ export default function DashboardScreen() {
           end={{ x: 1, y: 1 }}
         >
           <Text style={[styles.balanceLabel, { color: colors.mutedForeground }]}>
-            TOTAL AVAILABLE BALANCE
+            {showTotalBalance ? 'TOTAL BALANCE (INCL. LOCKED)' : 'AVAILABLE BALANCE'}
           </Text>
           <Text style={[styles.balanceAmount, { color: colors.foreground }]}>
-            ${balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            {formatCurrencyAbs(balance)}
           </Text>
+          {locked > 0 && (
+            <TouchableOpacity
+              onPress={() => setShowTotalBalance((v) => !v)}
+              style={styles.lockedRow}
+              hitSlop={6}
+            >
+              <Feather name="lock" size={11} color={colors.warning} />
+              <Text style={[styles.lockedText, { color: colors.warning }]}>
+                {formatCurrencyAbs(locked)} locked in savings — tap to {showTotalBalance ? 'hide' : 'show'} total
+              </Text>
+            </TouchableOpacity>
+          )}
           <View style={styles.inOutRow}>
             <View style={[styles.inOutCard, { backgroundColor: colors.credit + '15', borderColor: colors.credit + '30' }]}>
               <Feather name="arrow-down-circle" size={16} color={colors.credit} />
               <View>
                 <Text style={[styles.inOutLabel, { color: colors.mutedForeground }]}>Month In</Text>
                 <Text style={[styles.inOutAmount, { color: colors.credit }]}>
-                  +${income.toFixed(2)}
+                  +{formatCurrencyAbs(income)}
                 </Text>
               </View>
             </View>
@@ -159,7 +178,7 @@ export default function DashboardScreen() {
               <View>
                 <Text style={[styles.inOutLabel, { color: colors.mutedForeground }]}>Month Out</Text>
                 <Text style={[styles.inOutAmount, { color: colors.debit }]}>
-                  -${expenses.toFixed(2)}
+                  -{formatCurrencyAbs(expenses)}
                 </Text>
               </View>
             </View>
@@ -333,6 +352,16 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     fontWeight: '700',
     letterSpacing: -1,
+  },
+  lockedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 6,
+  },
+  lockedText: {
+    fontSize: 11,
+    fontFamily: 'Inter_500Medium',
   },
   inOutRow: { flexDirection: 'row', gap: 10 },
   inOutCard: {

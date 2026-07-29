@@ -17,6 +17,7 @@ import { useFinance, type AuditPeriod } from '@/context/FinanceContext';
 import { BudgetCard } from '@/components/BudgetCard';
 import { runGeminiAudit } from '@/services/tier3Service';
 import { router } from 'expo-router';
+import { formatCurrencyAbs } from '@/utils/currency';
 
 const PERIODS: { key: AuditPeriod; label: string }[] = [
   { key: 'WEEKLY', label: 'Week' },
@@ -191,18 +192,18 @@ export default function InsightsScreen() {
             <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.credit + '40' }]}>
               <Feather name="arrow-down-circle" size={18} color={colors.credit} />
               <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Income</Text>
-              <Text style={[styles.statValue, { color: colors.credit }]}>${income.toFixed(2)}</Text>
+              <Text style={[styles.statValue, { color: colors.credit }]}>{formatCurrencyAbs(income)}</Text>
             </View>
             <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.debit + '40' }]}>
               <Feather name="arrow-up-circle" size={18} color={colors.debit} />
               <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Expenses</Text>
-              <Text style={[styles.statValue, { color: colors.debit }]}>${expenses.toFixed(2)}</Text>
+              <Text style={[styles.statValue, { color: colors.debit }]}>{formatCurrencyAbs(expenses)}</Text>
             </View>
             <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Feather name="bar-chart-2" size={18} color={colors.primary} />
               <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Net</Text>
               <Text style={[styles.statValue, { color: income - expenses >= 0 ? colors.credit : colors.debit }]}>
-                {income - expenses >= 0 ? '+' : ''}${(income - expenses).toFixed(2)}
+                {income - expenses >= 0 ? '+' : ''}{formatCurrencyAbs(income - expenses)}
               </Text>
             </View>
           </View>
@@ -225,7 +226,7 @@ export default function InsightsScreen() {
                   <Feather name="alert-triangle" size={12} color={colors.warning} />
                 )}
                 <Text style={[styles.catAmount, { color: cat?.isRisk ? colors.riskDebit : colors.foreground }]}>
-                  ${amount.toFixed(2)}
+                  {formatCurrencyAbs(amount)}
                 </Text>
               </View>
             ))}

@@ -80,7 +80,7 @@ export default function AddBudgetScreen() {
         <View style={styles.field}>
           <Text style={[styles.label, { color: colors.mutedForeground }]}>Monthly Limit</Text>
           <View style={[styles.amountRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.currency, { color: colors.mutedForeground }]}>$</Text>
+            <Text style={[styles.currency, { color: colors.mutedForeground }]}>₦</Text>
             <TextInput
               value={limit}
               onChangeText={setLimit}

@@ -42,6 +42,7 @@ export default function AddTransactionScreen() {
   const [accountId, setAccountId] = useState(accounts.find((a) => !a.isDeleted)?.id ?? '');
   const [processing, setProcessing] = useState(false);
   const [aiResult, setAiResult] = useState<{ tier: string; confidence: number } | null>(null);
+  const [parsedTimestamp, setParsedTimestamp] = useState<string | null>(null);
   const [showManual, setShowManual] = useState(false);
   // Tracks a sync-queue entry created by a failed Tier 2 call during fast-log,
   // so that if the user finishes this same transaction manually below, we can
@@ -60,10 +61,12 @@ export default function AddTransactionScreen() {
     if (!fastText.trim()) return;
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setProcessing(true);
+    setParsedTimestamp(null);
 
     // Tier 1 — local
     const t1 = parseLocally(fastText, categories);
     if (t1 && t1.confidence >= 0.7) {
+      if (t1.timestamp) setParsedTimestamp(t1.timestamp);
       setAmount(t1.amount.toString());
       setDescription(t1.description);
       setType(t1.type);
@@ -75,6 +78,7 @@ export default function AddTransactionScreen() {
     }
     if (t1) {
       // Low-confidence local match — pre-fill but confirm
+      if (t1.timestamp) setParsedTimestamp(t1.timestamp);
       setAmount(t1.amount.toString());
       setDescription(t1.description);
       setType(t1.type);
@@ -132,7 +136,7 @@ export default function AddTransactionScreen() {
       amount: amt,
       type,
       description: description.trim(),
-      timestamp: new Date().toISOString(),
+      timestamp: parsedTimestamp ?? new Date().toISOString(),
       processedBy: aiResult ? (aiResult.tier.startsWith('On-Device') ? 'ON_DEVICE' : 'OPENROUTER') : 'MANUAL',
       confidence,
       needsConfirmation,
@@ -264,7 +268,7 @@ export default function AddTransactionScreen() {
         <View style={styles.field}>
           <Text style={[styles.label, { color: colors.mutedForeground }]}>Amount</Text>
           <View style={[styles.amountRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.currency, { color: colors.mutedForeground }]}>$</Text>
+            <Text style={[styles.currency, { color: colors.mutedForeground }]}>₦</Text>
             <TextInput
               value={amount}
               onChangeText={setAmount}
