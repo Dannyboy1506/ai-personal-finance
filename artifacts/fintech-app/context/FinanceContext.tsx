@@ -10,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SEED_CATEGORIES } from '@/constants/categories';
 import { parseWithOpenRouter } from '@/services/tier2Service';
 import { computeFirstRunDate, getNextRunDate, type RecurringFrequency } from '@/utils/recurringDates';
+import { loadApiBaseUrlOverride, loadModelOverrides } from '@/services/apiConfig';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -264,6 +265,13 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     (async () => {
       try {
+        // Not awaited into the Promise.all below on purpose — a slower
+        // override load shouldn't hold up showing the rest of the app,
+        // and getApiBaseUrl() safely falls back to the env var until this
+        // resolves.
+        loadApiBaseUrlOverride();
+        loadModelOverrides();
+
         const [
           rawAccounts,
           rawCategories,

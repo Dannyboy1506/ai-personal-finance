@@ -16,6 +16,7 @@ import { useColors } from '@/hooks/useColors';
 import { useFinance, type AuditPeriod } from '@/context/FinanceContext';
 import { BudgetCard } from '@/components/BudgetCard';
 import { runGeminiAudit } from '@/services/tier3Service';
+import { getTier3ModelOverride } from '@/services/apiConfig';
 import { router } from 'expo-router';
 import { formatCurrencyAbs } from '@/utils/currency';
 
@@ -108,7 +109,11 @@ export default function InsightsScreen() {
             <View style={styles.auditInfo}>
               <Text style={[styles.auditTitle, { color: colors.foreground }]}>Gemini Deep Audit</Text>
               <Text style={[styles.auditSub, { color: colors.mutedForeground }]}>
-                {period === 'WEEKLY' ? 'Quick review · Gemini 2.5 Flash' : 'Deep review · Gemini 2.5 Pro'}
+                {getTier3ModelOverride()
+                  ? `Model: ${getTier3ModelOverride()}`
+                  : period === 'WEEKLY'
+                  ? 'Quick review · Gemini 3.6 Flash'
+                  : 'Deep review · Gemini 3.1 Pro'}
               </Text>
             </View>
           </View>

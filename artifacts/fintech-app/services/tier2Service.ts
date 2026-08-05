@@ -1,5 +1,5 @@
 import type { Category } from '@/context/FinanceContext';
-import { getApiBaseUrl } from '@/services/apiConfig';
+import { getApiBaseUrl, getTier2ModelOverride } from '@/services/apiConfig';
 
 export interface AIParseResult {
   type: 'CREDIT' | 'DEBIT';
@@ -35,6 +35,7 @@ export async function parseWithOpenRouter(
       body: JSON.stringify({
         userInput,
         categories: categories.map((c) => ({ id: c.id, name: c.name })),
+        model: getTier2ModelOverride() ?? undefined,
       }),
     });
 

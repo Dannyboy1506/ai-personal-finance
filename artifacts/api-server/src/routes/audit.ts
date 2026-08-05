@@ -17,12 +17,19 @@ const PERIOD_LABEL: Record<AuditPeriod, string> = {
 // Weekly audits are frequent and meant to be quick — Flash is fast and free-tier
 // friendly. Monthly and longer are infrequent, higher-stakes reviews of more
 // data, so they get Gemini's more capable reasoning model instead.
+//
+// NOTE (as of Aug 2026): gemini-2.5-flash/-pro are scheduled to shut down
+// Oct 16, 2026 on the Gemini Developer API — these defaults point at the
+// current Gemini 3.x generation instead. A client-supplied `model` in the
+// request body overrides these entirely (see isValidSummary/route below),
+// so this map is just the fallback when the app doesn't ask for something
+// specific.
 const PERIOD_MODEL: Record<AuditPeriod, string> = {
-  WEEKLY: "gemini-2.5-flash",
-  MONTHLY: "gemini-2.5-pro",
-  QUARTERLY: "gemini-2.5-pro",
-  HALF_YEARLY: "gemini-2.5-pro",
-  YEARLY: "gemini-2.5-pro",
+  WEEKLY: "gemini-3.6-flash",
+  MONTHLY: "gemini-3.1-pro",
+  QUARTERLY: "gemini-3.1-pro",
+  HALF_YEARLY: "gemini-3.1-pro",
+  YEARLY: "gemini-3.1-pro",
 };
 
 // Longer lookback periods have more to summarize and warrant more room.
@@ -42,6 +49,8 @@ interface PeriodSummary {
   topCategories: Array<{ name: string; amount: number; isRisk: boolean }>;
   activeGoals: Array<{ name: string; progress: number; pacing: string }>;
   budgetAlerts: Array<{ category: string; spent: number; limit: number; percentage: number }>;
+  /** Optional client override — lets the app test/switch models without a server redeploy. */
+  model?: string;
 }
 
 const VALID_PERIODS: AuditPeriod[] = ["WEEKLY", "MONTHLY", "QUARTERLY", "HALF_YEARLY", "YEARLY"];
@@ -49,6 +58,7 @@ const VALID_PERIODS: AuditPeriod[] = ["WEEKLY", "MONTHLY", "QUARTERLY", "HALF_YE
 function isValidSummary(body: unknown): body is PeriodSummary {
   if (typeof body !== "object" || body === null) return false;
   const b = body as Record<string, unknown>;
+  if (b["model"] !== undefined && typeof b["model"] !== "string") return false;
   return (
     typeof b["period"] === "string" &&
     VALID_PERIODS.includes(b["period"] as AuditPeriod) &&
@@ -80,7 +90,7 @@ router.post("/audit", async (req: Request, res: Response) => {
 
   const summary = req.body;
   const periodLabel = PERIOD_LABEL[summary.period];
-  const model = PERIOD_MODEL[summary.period];
+  const model = summary.model?.trim() || PERIOD_MODEL[summary.period];
   const maxOutputTokens = PERIOD_MAX_TOKENS[summary.period];
   const isLongRange = summary.period !== "WEEKLY";
 

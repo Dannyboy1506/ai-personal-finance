@@ -1,4 +1,4 @@
-import { getApiBaseUrl } from '@/services/apiConfig';
+import { getApiBaseUrl, getTier3ModelOverride } from '@/services/apiConfig';
 import type { PeriodSummary } from '@/context/FinanceContext';
 
 /**
@@ -24,7 +24,7 @@ export async function runGeminiAudit(summary: PeriodSummary): Promise<string> {
       method: 'POST',
       signal: controller.signal,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(summary),
+      body: JSON.stringify({ ...summary, model: getTier3ModelOverride() ?? undefined }),
     });
 
     clearTimeout(timeout);

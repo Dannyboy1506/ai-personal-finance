@@ -21,6 +21,8 @@ interface CategoryInput {
 interface ParseRequestBody {
   userInput?: unknown;
   categories?: unknown;
+  /** Optional client override — tried first, before the built-in fallback list. */
+  model?: unknown;
 }
 
 interface ParseResult {
@@ -33,9 +35,10 @@ interface ParseResult {
 
 function isValidBody(
   body: ParseRequestBody,
-): body is { userInput: string; categories: CategoryInput[] } {
+): body is { userInput: string; categories: CategoryInput[]; model?: string } {
   if (typeof body.userInput !== "string" || !body.userInput.trim()) return false;
   if (!Array.isArray(body.categories)) return false;
+  if (body.model !== undefined && typeof body.model !== "string") return false;
   return body.categories.every(
     (c) =>
       typeof c === "object" &&
@@ -125,7 +128,7 @@ router.post("/parse", async (req: Request, res: Response) => {
     return;
   }
 
-  const { userInput, categories } = body;
+  const { userInput, categories, model: modelOverride } = body;
   const categoryList = categories.map((c) => `"${c.name}" (id: ${c.id})`).join(", ");
 
   const prompt = `You are a precise bank transaction parser for a personal finance app.
@@ -153,7 +156,12 @@ Return ONLY valid JSON (no markdown, no reasoning):
     let parsed: Partial<ParseResult> | null = null;
     let lastError: unknown = null;
 
-    for (const model of MODELS) {
+    // A client-supplied model is tried first (for testing/switching), then
+    // the built-in list is still tried after it as a safety net if it fails —
+    // an override never makes the request "only try one model and give up".
+    const attemptOrder = modelOverride ? [modelOverride, ...MODELS] : MODELS;
+
+    for (const model of attemptOrder) {
       try {
         parsed = await callModel(model, apiKey, prompt, controller.signal);
         if (parsed) break;

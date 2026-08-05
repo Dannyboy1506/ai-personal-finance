@@ -6,6 +6,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -17,7 +18,7 @@ import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import { useColors } from '@/hooks/useColors';
 import { useFinance } from '@/context/FinanceContext';
-import { getApiBaseUrl } from '@/services/apiConfig';
+import { getApiBaseUrl, getApiBaseUrlOverride, setApiBaseUrlOverride, getTier2ModelOverride, setTier2ModelOverride, getTier3ModelOverride, setTier3ModelOverride } from '@/services/apiConfig';
 import { getCrashLog, clearCrashLog, formatCrashLogText } from '@/utils/crashLog';
 
 function SettingRow({
@@ -64,6 +65,11 @@ export default function SettingsScreen() {
   const [importing, setImporting] = useState(false);
   const [logCount, setLogCount] = useState<number | null>(null);
   const [sharingLog, setSharingLog] = useState(false);
+  const [urlInput, setUrlInput] = useState(getApiBaseUrlOverride() ?? '');
+  const [urlSavedNotice, setUrlSavedNotice] = useState(false);
+  const [tier2ModelInput, setTier2ModelInput] = useState(getTier2ModelOverride() ?? '');
+  const [tier3ModelInput, setTier3ModelInput] = useState(getTier3ModelOverride() ?? '');
+  const [modelSavedNotice, setModelSavedNotice] = useState<'tier2' | 'tier3' | null>(null);
 
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
   const bottomPad = Platform.OS === 'web' ? 34 : insets.bottom;
@@ -94,6 +100,33 @@ export default function SettingsScreen() {
     aiStatus === 'loading' ? 'Checking…' : aiStatus === 'unreachable' ? 'Backend unreachable' : aiStatus.tier3Configured ? 'Connected' : 'Not configured on server';
   const tier2Ok = typeof aiStatus === 'object' && aiStatus.tier2Configured;
   const tier3Ok = typeof aiStatus === 'object' && aiStatus.tier3Configured;
+
+  const handleSaveUrl = async () => {
+    await setApiBaseUrlOverride(urlInput || null);
+    setUrlSavedNotice(true);
+    setAiStatus('loading'); // re-triggers the status check effect below via baseUrl changing
+    setTimeout(() => setUrlSavedNotice(false), 2500);
+  };
+
+  const handleClearUrl = async () => {
+    await setApiBaseUrlOverride(null);
+    setUrlInput('');
+    setAiStatus('loading');
+  };
+
+  const handleSaveTier2Model = async (model: string) => {
+    await setTier2ModelOverride(model || null);
+    setTier2ModelInput(model);
+    setModelSavedNotice('tier2');
+    setTimeout(() => setModelSavedNotice(null), 2000);
+  };
+
+  const handleSaveTier3Model = async (model: string) => {
+    await setTier3ModelOverride(model || null);
+    setTier3ModelInput(model);
+    setModelSavedNotice('tier3');
+    setTimeout(() => setModelSavedNotice(null), 2000);
+  };
 
   const handleExport = async () => {
     setExporting(true);
@@ -213,16 +246,164 @@ export default function SettingsScreen() {
           />
           <SettingRow
             icon="server"
-            label="Tier 2 — OpenRouter (Llama 3.3 70B)"
+            label={`Tier 2 — OpenRouter (${tier2ModelInput || 'meta-llama/llama-3.3-70b-instruct:free'})`}
             value={tier2Label}
             iconColor={tier2Ok ? colors.credit : colors.warning}
           />
           <SettingRow
             icon="cpu"
-            label="Tier 3 — Google Gemini 2.5 Flash"
+            label={`Tier 3 — Gemini (${tier3ModelInput || 'gemini-3.6-flash / gemini-3.1-pro'})`}
             value={tier3Label}
             iconColor={tier3Ok ? colors.credit : colors.warning}
           />
+        </View>
+
+        {/* Backend URL — editable at runtime, no rebuild needed */}
+        <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>AI BACKEND URL</Text>
+          <Text style={[styles.backupHint, { color: colors.mutedForeground }]}>
+            Where Tier 2/3 send requests. Setting this here takes effect immediately —
+            no need to rebuild the app to point at a different backend.
+          </Text>
+          <View style={styles.urlRow}>
+            <TextInput
+              value={urlInput}
+              onChangeText={setUrlInput}
+              placeholder="https://your-api-server.onrender.com"
+              placeholderTextColor={colors.mutedForeground}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              style={[styles.urlInput, { color: colors.foreground, backgroundColor: colors.elevated, borderColor: colors.border }]}
+            />
+          </View>
+          <View style={styles.backupButtons}>
+            <TouchableOpacity
+              onPress={handleSaveUrl}
+              style={[styles.backupBtn, { backgroundColor: colors.primary + '15', borderColor: colors.primary + '40' }]}
+            >
+              <Feather name={urlSavedNotice ? 'check' : 'save'} size={15} color={colors.primary} />
+              <Text style={[styles.backupBtnText, { color: colors.primary }]}>
+                {urlSavedNotice ? 'Saved' : 'Save'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleClearUrl}
+              style={[styles.backupBtn, { backgroundColor: colors.debit + '15', borderColor: colors.debit + '40' }]}
+            >
+              <Feather name="x-circle" size={15} color={colors.debit} />
+              <Text style={[styles.backupBtnText, { color: colors.debit }]}>Clear / use default</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Model selection — pick which model each tier calls, no redeploy needed */}
+        <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>MODEL SELECTION</Text>
+          <Text style={[styles.backupHint, { color: colors.mutedForeground }]}>
+            Overrides what the server uses by default. Takes effect on your next request — the server doesn't need to be redeployed.
+          </Text>
+
+          <Text style={[styles.modelLabel, { color: colors.foreground }]}>Tier 2 — OpenRouter</Text>
+          <View style={styles.chipsWrap}>
+            {[
+              { label: 'Llama 3.3 70B (default)', value: 'meta-llama/llama-3.3-70b-instruct:free' },
+              { label: 'DeepSeek R1 Distill', value: 'deepseek/deepseek-r1-distill-llama-70b:free' },
+            ].map((opt) => {
+              const active = tier2ModelInput === opt.value;
+              return (
+                <TouchableOpacity
+                  key={opt.value}
+                  onPress={() => handleSaveTier2Model(opt.value)}
+                  style={[
+                    styles.modelChip,
+                    { backgroundColor: active ? colors.primary + '25' : colors.elevated, borderColor: active ? colors.primary : colors.border },
+                  ]}
+                >
+                  <Text style={[styles.modelChipText, { color: active ? colors.primary : colors.mutedForeground }]}>{opt.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <View style={styles.urlRow}>
+            <TextInput
+              value={tier2ModelInput}
+              onChangeText={setTier2ModelInput}
+              onSubmitEditing={() => handleSaveTier2Model(tier2ModelInput)}
+              placeholder="or type any OpenRouter model id"
+              placeholderTextColor={colors.mutedForeground}
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={[styles.urlInput, { color: colors.foreground, backgroundColor: colors.elevated, borderColor: colors.border }]}
+            />
+          </View>
+          <View style={[styles.backupButtons, { paddingTop: 0 }]}>
+            <TouchableOpacity
+              onPress={() => handleSaveTier2Model(tier2ModelInput)}
+              style={[styles.backupBtn, { backgroundColor: colors.primary + '15', borderColor: colors.primary + '40' }]}
+            >
+              <Feather name={modelSavedNotice === 'tier2' ? 'check' : 'save'} size={15} color={colors.primary} />
+              <Text style={[styles.backupBtnText, { color: colors.primary }]}>{modelSavedNotice === 'tier2' ? 'Saved' : 'Save'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => handleSaveTier2Model('')}
+              style={[styles.backupBtn, { backgroundColor: colors.debit + '15', borderColor: colors.debit + '40' }]}
+            >
+              <Feather name="x-circle" size={15} color={colors.debit} />
+              <Text style={[styles.backupBtnText, { color: colors.debit }]}>Use default</Text>
+            </TouchableOpacity>
+          </View>
+
+          <Text style={[styles.modelLabel, { color: colors.foreground }]}>Tier 3 — Gemini Deep Audit</Text>
+          <View style={styles.chipsWrap}>
+            {[
+              { label: 'Gemini 3.6 Flash (default weekly)', value: 'gemini-3.6-flash' },
+              { label: 'Gemini 3.1 Pro (default monthly+)', value: 'gemini-3.1-pro' },
+              { label: 'Gemini 2.5 Flash (retiring Oct 2026)', value: 'gemini-2.5-flash' },
+            ].map((opt) => {
+              const active = tier3ModelInput === opt.value;
+              return (
+                <TouchableOpacity
+                  key={opt.value}
+                  onPress={() => handleSaveTier3Model(opt.value)}
+                  style={[
+                    styles.modelChip,
+                    { backgroundColor: active ? colors.primary + '25' : colors.elevated, borderColor: active ? colors.primary : colors.border },
+                  ]}
+                >
+                  <Text style={[styles.modelChipText, { color: active ? colors.primary : colors.mutedForeground }]}>{opt.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <View style={styles.urlRow}>
+            <TextInput
+              value={tier3ModelInput}
+              onChangeText={setTier3ModelInput}
+              onSubmitEditing={() => handleSaveTier3Model(tier3ModelInput)}
+              placeholder="or type any Gemini model id"
+              placeholderTextColor={colors.mutedForeground}
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={[styles.urlInput, { color: colors.foreground, backgroundColor: colors.elevated, borderColor: colors.border }]}
+            />
+          </View>
+          <View style={[styles.backupButtons, { paddingTop: 0 }]}>
+            <TouchableOpacity
+              onPress={() => handleSaveTier3Model(tier3ModelInput)}
+              style={[styles.backupBtn, { backgroundColor: colors.primary + '15', borderColor: colors.primary + '40' }]}
+            >
+              <Feather name={modelSavedNotice === 'tier3' ? 'check' : 'save'} size={15} color={colors.primary} />
+              <Text style={[styles.backupBtnText, { color: colors.primary }]}>{modelSavedNotice === 'tier3' ? 'Saved' : 'Save'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => handleSaveTier3Model('')}
+              style={[styles.backupBtn, { backgroundColor: colors.debit + '15', borderColor: colors.debit + '40' }]}
+            >
+              <Feather name="x-circle" size={15} color={colors.debit} />
+              <Text style={[styles.backupBtnText, { color: colors.debit }]}>Use default</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Data Summary */}
@@ -400,6 +581,37 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 16,
   },
+  urlRow: { paddingHorizontal: 16, paddingBottom: 12 },
+  urlInput: {
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    borderRadius: 10,
+    borderWidth: 1,
+    fontSize: 13,
+    fontFamily: 'Inter_400Regular',
+  },
+  modelLabel: {
+    fontSize: 13,
+    fontFamily: 'Inter_600SemiBold',
+    fontWeight: '600',
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 8,
+  },
+  chipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+  },
+  modelChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  modelChipText: { fontSize: 12, fontFamily: 'Inter_500Medium' },
   backupBtn: {
     flex: 1,
     flexDirection: 'row',
