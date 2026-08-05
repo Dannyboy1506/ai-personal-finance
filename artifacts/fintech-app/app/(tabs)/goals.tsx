@@ -2,6 +2,7 @@ import React from 'react';
 import {
   FlatList,
   Platform,
+  Pressable,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -20,7 +21,15 @@ function daysRemaining(targetDate: string): number {
   return Math.max(0, Math.ceil((new Date(targetDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
 }
 
-function GoalRow({ goal, pacing }: { goal: Goal; pacing: 'on-track' | 'behind' | 'at-risk' }) {
+function GoalRow({
+  goal,
+  pacing,
+  onPress,
+}: {
+  goal: Goal;
+  pacing: 'on-track' | 'behind' | 'at-risk';
+  onPress?: () => void;
+}) {
   const colors = useColors();
   const progress = Math.min(goal.currentAmount / goal.targetAmount, 1);
   const pct = Math.round(progress * 100);
@@ -40,13 +49,22 @@ function GoalRow({ goal, pacing }: { goal: Goal; pacing: 'on-track' | 'behind' |
   const pc = pacingColors[pacing];
 
   return (
-    <View style={[styles.goalRow, { backgroundColor: colors.card, borderColor: pc + '40' }]}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Manage goal ${goal.name}`}
+      style={({ pressed }) => [
+        styles.goalRow,
+        { backgroundColor: colors.card, borderColor: pc + '40', opacity: pressed ? 0.85 : 1 },
+      ]}
+    >
       <View style={styles.goalHeader}>
         <Text style={[styles.goalName, { color: colors.foreground }]}>{goal.name}</Text>
         <View style={[styles.pacingBadge, { backgroundColor: pc + '20' }]}>
           <Feather name={pacingIcons[pacing]} size={12} color={pc} />
           <Text style={[styles.pacingText, { color: pc }]}>{pacingLabels[pacing]}</Text>
         </View>
+        <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
       </View>
 
       {/* Progress bar */}
@@ -76,14 +94,14 @@ function GoalRow({ goal, pacing }: { goal: Goal; pacing: 'on-track' | 'behind' |
           </Text>
         </View>
       )}
-    </View>
+    </Pressable>
   );
 }
 
 export default function GoalsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { goals, getGoalPacing, deleteGoal } = useFinance();
+  const { goals, getGoalPacing } = useFinance();
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
   const bottomPad = Platform.OS === 'web' ? 34 : insets.bottom;
 
@@ -114,7 +132,11 @@ export default function GoalsScreen() {
         data={activeGoals}
         keyExtractor={(g) => g.id}
         renderItem={({ item }) => (
-          <GoalRow goal={item} pacing={getGoalPacing(item)} />
+          <GoalRow
+            goal={item}
+            pacing={getGoalPacing(item)}
+            onPress={() => router.push(`/add-goal?id=${item.id}`)}
+          />
         )}
         ListEmptyComponent={
           <View style={[styles.empty, { borderColor: colors.border }]}>

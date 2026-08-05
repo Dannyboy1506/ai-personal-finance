@@ -105,3 +105,58 @@ the app tracks accounts, budgets, goals, and recurring transactions locally.
 ## Pointers
 
 - See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+
+## Recent changes (this session)
+
+Fixed three reported bugs and tightened the integration between transactions,
+budgets, and goals in `artifacts/fintech-app`:
+
+- **Amount-parsing bug (`services/tier1Engine.ts`)**: the free-text amount
+  regex used a bounded `\d{1,3}` alternative ahead of the comma-group,
+  which silently truncated any comma-less 4+ digit amount to its first 3
+  digits ("15000" parsed as 150) — high confidence, no warning. Fixed by
+  switching to an unbounded `\d+` leading group; added a casual "5k"/"1.5k"
+  thousands shorthand alongside it. Covered by a regex test battery in the
+  session transcript, not an automated test file (none exist in this repo).
+- **Tier 1 "gives up" too easily**: an unmatched category used to return
+  `null` and force an escalation to Tier 2, which has nowhere to go without
+  a deployed `api-server`. Now falls back to `cat_general` at lower
+  confidence (`needsConfirmation: true`) instead of failing outright, so
+  fast-log always produces a usable draft with zero backend configured.
+- **`isOffline` false positive**: fast-log used to call `setOffline(true)`
+  whenever Tier 2 returned null, including when no backend URL was even
+  set — showing a misleading "Offline" banner on a fully-connected device.
+  Added `isBackendConfigured()` to `services/apiConfig.ts`; the offline
+  banner/sync-queue path now only fires when a backend *is* configured but
+  the request actually failed.
+- **Goals had no edit/delete/add-funds UI**: `updateGoal`/`deleteGoal`
+  existed on the context but nothing called them. `add-goal.tsx` now
+  handles both create and edit via an optional `?id=` param (quick
+  "add funds" action, full field edit, delete with confirm). `GoalCard`
+  and the goals-tab `GoalRow` are now pressable and route to it.
+- **Budgets had no edit/delete UI, and no duplicate guard**: same gap —
+  added `updateBudget` to `FinanceContext`, gave `add-budget.tsx` the same
+  create/edit split, made `BudgetCard` pressable, and blocked creating a
+  second budget on a category that already has one (was previously the
+  only way a wrong category choice could get permanently stuck, since
+  there was no edit path).
+- **Category coverage**: expanded keyword lists and added `cat_health`,
+  `cat_education`, `cat_family` (previously uncategorized spending fell to
+  General with no keyword support at all). Existing installs get these via
+  an additive migration in `FinanceContext`'s load effect
+  (`mergeSeedCategories`) — unions in new keywords/categories, never
+  touches user-taught keywords or existing data.
+- **Transaction → budget/goal visibility**: `add-transaction.tsx` now
+  shows a brief inline confirmation after saving when the transaction
+  lands in an active budget or a linked goal (e.g. "Logged to Groceries &
+  Food — ₦800 of ₦2,000 used this month (40%)"), and adds an optional
+  "save toward a goal" chip row for expense transactions (sets the
+  already-existing but previously-unused `goalId` field). Budget
+  spend itself was already correctly live-computed from transactions in
+  `getBudgetSpent` — this was a visibility/UX gap, not a data-layer bug.
+- Also wired up transaction deletion (long-press → confirm) on both the
+  home dashboard and the transactions tab — `deleteTransaction` existed
+  on the context but wasn't called from anywhere either.
+
+Not touched: `artifacts/api-server`, `lib/*`, root config. Nothing here
+required a backend change — everything above is client-side.

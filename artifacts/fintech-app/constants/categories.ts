@@ -33,6 +33,7 @@ export const SEED_CATEGORIES: CategoryDef[] = [
       'uber', 'bolt', 'taxi', 'fuel', 'petrol', 'diesel', 'bus', 'train',
       'lyft', 'ride', 'transport', 'fare', 'driving', 'park', 'parking',
       'vehicle', 'auto', 'commute', 'flight', 'airline', 'airport',
+      'okada', 'keke', 'toll', 'car wash', 'mechanic', 'tyre',
     ],
   },
   {
@@ -60,6 +61,8 @@ export const SEED_CATEGORIES: CategoryDef[] = [
       'tastee', 'food', 'groceries', 'supermarket', 'restaurant', 'dinner',
       'lunch', 'breakfast', 'pizza', 'burger', 'eatery', 'canteen',
       'market', 'provision', 'snack', 'coffee', 'drinks',
+      'suya', 'shawarma', 'bar', 'lounge', 'takeout', 'take-out', 'buka',
+      'hangout',
     ],
   },
   {
@@ -86,7 +89,46 @@ export const SEED_CATEGORIES: CategoryDef[] = [
     keywords: [
       'amazon', 'jumia', 'konga', 'clothes', 'fashion', 'shopping', 'tech',
       'gadget', 'phone', 'laptop', 'electronics', 'beauty', 'cosmetics',
-      'haircut', 'salon', 'spa', 'gym', 'fitness',
+      'haircut', 'salon', 'spa', 'gym', 'fitness', 'furniture', 'perfume',
+    ],
+  },
+  {
+    id: 'cat_health',
+    name: 'Health & Wellness',
+    type: 'EXPENSE',
+    isRisk: false,
+    color: '#14B8A6',
+    icon: 'heart',
+    keywords: [
+      'hospital', 'clinic', 'doctor', 'pharmacy', 'chemist', 'drugs',
+      'medicine', 'medical', 'dental', 'dentist', 'health', 'checkup',
+      'prescription', 'surgery', 'lab test', 'scan',
+    ],
+  },
+  {
+    id: 'cat_education',
+    name: 'Education',
+    type: 'EXPENSE',
+    isRisk: false,
+    color: '#6366F1',
+    icon: 'book',
+    keywords: [
+      'school', 'tuition', 'school fees', 'fees', 'books', 'textbook',
+      'uniform', 'lesson', 'training', 'course', 'exam', 'jamb', 'waec',
+      'pta',
+    ],
+  },
+  {
+    id: 'cat_family',
+    name: 'Family & Giving',
+    type: 'EXPENSE',
+    isRisk: false,
+    color: '#F97316',
+    icon: 'gift',
+    keywords: [
+      'gift', 'gifts', 'present', 'wedding', 'birthday', 'contribution',
+      'donation', 'offering', 'tithe', 'church', 'charity', 'support',
+      'ajo', 'esusu', 'thrift', 'family',
     ],
   },
   {
@@ -99,6 +141,7 @@ export const SEED_CATEGORIES: CategoryDef[] = [
     keywords: [
       'charge', 'commission', 'transfer fee', 'maintenance fee',
       'stamp duty', 'vat charge', 'bank fee', 'atm charge', 'sms alert',
+      'pos charge', 'ussd charge',
     ],
   },
   {

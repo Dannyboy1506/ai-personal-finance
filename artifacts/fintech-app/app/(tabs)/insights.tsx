@@ -260,6 +260,7 @@ export default function InsightsScreen() {
                 budget={b}
                 category={getCategoryById(b.categoryId)}
                 spent={getBudgetSpent(b.categoryId)}
+                onPress={() => router.push(`/add-budget?id=${b.id}`)}
               />
             ))
           )}

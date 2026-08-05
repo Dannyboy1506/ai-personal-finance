@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import Animated, {
   useAnimatedStyle,
@@ -13,6 +13,7 @@ import { formatCurrencyAbs } from '@/utils/currency';
 interface GoalCardProps {
   goal: Goal;
   pacing: GoalPacing;
+  onPress?: () => void;
 }
 
 const PACING_CONFIG = {
@@ -26,7 +27,7 @@ function daysRemaining(targetDate: string): number {
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
 }
 
-export function GoalCard({ goal, pacing }: GoalCardProps) {
+export function GoalCard({ goal, pacing, onPress }: GoalCardProps) {
   const colors = useColors();
   const config = PACING_CONFIG[pacing];
   const pacingColor = colors[config.colorKey];
@@ -44,13 +45,18 @@ export function GoalCard({ goal, pacing }: GoalCardProps) {
   }));
 
   return (
-    <View
-      style={[
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={onPress ? `Manage goal ${goal.name}` : undefined}
+      style={({ pressed }) => [
         styles.card,
         {
           backgroundColor: colors.card,
           borderColor: pacingColor + '40',
           borderWidth: 1,
+          opacity: pressed && onPress ? 0.85 : 1,
         },
       ]}
     >
@@ -84,7 +90,14 @@ export function GoalCard({ goal, pacing }: GoalCardProps) {
           {days > 0 ? `${days}d left` : 'Deadline passed'}
         </Text>
       </View>
-    </View>
+
+      {onPress && (
+        <View style={styles.manageRow}>
+          <Feather name="edit-2" size={11} color={colors.mutedForeground} />
+          <Text style={[styles.manageText, { color: colors.mutedForeground }]}>Tap to manage</Text>
+        </View>
+      )}
+    </Pressable>
   );
 }
 
@@ -138,6 +151,15 @@ const styles = StyleSheet.create({
   },
   days: {
     fontSize: 12,
+    fontFamily: 'Inter_400Regular',
+  },
+  manageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  manageText: {
+    fontSize: 10,
     fontFamily: 'Inter_400Regular',
   },
 });

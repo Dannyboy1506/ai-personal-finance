@@ -102,11 +102,40 @@ function tryParseBankAlert(input: string, categories: Category[]): ParseResult |
 }
 
 /**
+ * Extracts a leading numeric amount from free text, supporting "15",
+ * "15.50", "1,500", and a casual "k" shorthand for thousands ("5k" -> 5000,
+ * "1.5k" -> 1500, "100 k" -> 100000). Returns null only when there's no
+ * number in the text at all.
+ *
+ * The leading digit run MUST be `\d+` (unbounded), not `\d{1,3}`. A bounded
+ * `\d{1,3}` alternative ahead of a `(?:,\d{3})*` group looks reasonable for
+ * matching comma-grouped numbers, but since regex alternation in JS takes
+ * the first alternative that matches rather than the longest, `\d{1,3}`
+ * happily matches just the first 1–3 digits of a plain, comma-less number
+ * and stops there — silently truncating "15000" to "150". Naira amounts
+ * are routinely typed without thousands separators ("spent 15000 on
+ * rent"), so that bug would corrupt a large fraction of real input, and do
+ * it at high confidence with no visible warning. `\d+` greedily consumes
+ * the whole run first, so both "15000" and "1,500,000" parse correctly
+ * through the same pattern.
+ */
+function parseAmountToken(cleaned: string): number | null {
+  const match = cleaned.match(/(\d+(?:,\d{3})*(?:\.\d{1,2})?)(\s?k\b)?/i);
+  if (!match) return null;
+  const base = parseFloat(match[1].replace(/,/g, ''));
+  if (!base || base <= 0) return null;
+  return match[2] ? base * 1000 : base;
+}
+
+/**
  * Tier 1: On-device parsing engine.
  * Tries structured bank-alert parsing first (see tryParseBankAlert), then
  * falls back to free-text regex + learned keyword map. Zero network, zero
- * latency. Returns null when no confident match — caller should escalate
- * to Tier 2.
+ * latency. Returns null only when no amount could be found at all — for
+ * everything else (including an unmatched category) it returns its best
+ * guess rather than giving up, since this app has to work end-to-end with
+ * no backend configured. A category miss just means lower confidence and
+ * needsConfirmation: true, not a dead end.
  */
 export function parseLocally(input: string, categories: Category[]): ParseResult | null {
   const bankAlert = tryParseBankAlert(input, categories);
@@ -114,11 +143,9 @@ export function parseLocally(input: string, categories: Category[]): ParseResult
 
   const cleaned = input.toLowerCase().trim();
 
-  // 1. Extract amount — support formats: "15", "15.50", "1,500"
-  const amountMatch = cleaned.match(/(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)/);
-  if (!amountMatch) return null;
-  const amount = parseFloat(amountMatch[1].replace(/,/g, ''));
-  if (!amount || amount <= 0) return null;
+  // 1. Extract amount — support formats: "15", "15.50", "1,500", "5k"
+  const amount = parseAmountToken(cleaned);
+  if (!amount) return null;
 
   // 2. Determine transaction type using phrase boundaries
   const creditPatterns = [
@@ -155,27 +182,29 @@ export function parseLocally(input: string, categories: Category[]): ParseResult
     };
   }
 
-  // 4. Match against learned keyword map (higher weight = earlier in list)
+  // 4. Match against learned keyword map (higher weight = earlier in list).
+  // No match doesn't mean no result — amount and direction are already
+  // solid, so fall back to General Expenses at lower confidence instead of
+  // bailing out. This is what keeps "Parse with AI" always producing a
+  // usable, editable draft instead of silently failing whenever the text
+  // doesn't happen to hit a known keyword.
   const match = matchExpenseCategory(cleaned, categories);
-  if (!match) return null; // No match — escalate to Tier 2
 
   return {
     amount,
     type,
-    categoryId: match.categoryId,
+    categoryId: match?.categoryId ?? 'cat_general',
     description: input.trim(),
     processedBy: 'ON_DEVICE',
-    confidence: match.confidence,
-    needsConfirmation: match.confidence < 0.7,
+    confidence: match?.confidence ?? 0.4,
+    needsConfirmation: !match || match.confidence < 0.7,
   };
 }
 
 /**
- * Extract just the numeric amount from free text. Used for fast-log preview.
+ * Extract just the numeric amount from free text (including the "5k" style
+ * shorthand). Used for fast-log preview.
  */
 export function extractAmount(text: string): number | null {
-  const match = text.match(/(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)/);
-  if (!match) return null;
-  const val = parseFloat(match[1].replace(/,/g, ''));
-  return val > 0 ? val : null;
+  return parseAmountToken(text.toLowerCase());
 }

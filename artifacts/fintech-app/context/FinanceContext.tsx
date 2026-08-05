@@ -154,6 +154,7 @@ interface FinanceContextValue {
   deleteGoal: (id: string) => void;
   // Budgets
   addBudget: (data: Omit<Budget, 'id' | 'createdAt'>) => Budget;
+  updateBudget: (id: string, updates: Partial<Budget>) => void;
   deleteBudget: (id: string) => void;
   // Sync queue
   addToSyncQueue: (item: Omit<SyncQueueItem, 'id' | 'createdAt'>) => SyncQueueItem;
@@ -188,6 +189,36 @@ const FinanceContext = createContext<FinanceContextValue | null>(null);
 
 function genId(): string {
   return Date.now().toString() + Math.random().toString(36).substr(2, 9);
+}
+
+/**
+ * Additively merges the current SEED_CATEGORIES into whatever's already on
+ * disk from a previous app version: brand-new categories get appended, and
+ * any new keywords added to an existing seed category get unioned into the
+ * user's stored copy. Never removes or overwrites anything the user already
+ * has — including keywords they've taught via learnKeyword — since stored
+ * categories are the source of truth once onboarding has happened. This is
+ * what lets an app update (e.g. adding "Health & Wellness" as a category,
+ * or teaching an existing category new keywords) reach users who onboarded
+ * on an older version, without touching their existing data.
+ */
+function mergeSeedCategories(stored: Category[]): { merged: Category[]; changed: boolean } {
+  let changed = false;
+  const storedIds = new Set(stored.map((c) => c.id));
+
+  const updatedExisting = stored.map((c) => {
+    const seed = SEED_CATEGORIES.find((s) => s.id === c.id);
+    if (!seed) return c;
+    const newKeywords = seed.keywords.filter((k) => !c.keywords.includes(k));
+    if (newKeywords.length === 0) return c;
+    changed = true;
+    return { ...c, keywords: [...c.keywords, ...newKeywords] };
+  });
+
+  const newCategories: Category[] = SEED_CATEGORIES.filter((s) => !storedIds.has(s.id)).map((c) => ({ ...c }));
+  if (newCategories.length > 0) changed = true;
+
+  return { merged: [...updatedExisting, ...newCategories], changed };
 }
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
@@ -285,8 +316,16 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
             AsyncStorage.setItem(KEYS.onboarded, 'true'),
           ]);
         } else {
-          if (rawCategories) setCategories(JSON.parse(rawCategories));
-          else setCategories(SEED_CATEGORIES.map((c) => ({ ...c })));
+          if (rawCategories) {
+            const storedCategories = JSON.parse(rawCategories) as Category[];
+            const { merged, changed } = mergeSeedCategories(storedCategories);
+            setCategories(merged);
+            if (changed) {
+              await AsyncStorage.setItem(KEYS.categories, JSON.stringify(merged));
+            }
+          } else {
+            setCategories(SEED_CATEGORIES.map((c) => ({ ...c })));
+          }
           if (rawAccounts) setAccounts(JSON.parse(rawAccounts));
         }
 
@@ -489,6 +528,17 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         return next;
       });
       return budget;
+    },
+    [persist],
+  );
+
+  const updateBudget = useCallback(
+    (id: string, updates: Partial<Budget>) => {
+      setBudgets((prev) => {
+        const next = prev.map((b) => (b.id === id ? { ...b, ...updates } : b));
+        persist(KEYS.budgets, next);
+        return next;
+      });
     },
     [persist],
   );
@@ -989,6 +1039,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         updateGoal,
         deleteGoal,
         addBudget,
+        updateBudget,
         deleteBudget,
         addToSyncQueue,
         updateSyncItem,

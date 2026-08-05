@@ -18,6 +18,8 @@ import { useColors } from '@/hooks/useColors';
 import { useFinance } from '@/context/FinanceContext';
 import { parseLocally } from '@/services/tier1Engine';
 import { parseWithOpenRouter } from '@/services/tier2Service';
+import { isBackendConfigured } from '@/services/apiConfig';
+import { formatCurrencyAbs } from '@/utils/currency';
 
 type TxType = 'CREDIT' | 'DEBIT';
 
@@ -27,11 +29,15 @@ export default function AddTransactionScreen() {
   const {
     categories,
     accounts,
+    goals,
+    budgets,
     addTransaction,
     addToSyncQueue,
     updateSyncItem,
     setOffline,
     learnKeyword,
+    getBudgetSpent,
+    getCategoryById,
   } = useFinance();
 
   const [fastText, setFastText] = useState('');
@@ -40,8 +46,12 @@ export default function AddTransactionScreen() {
   const [type, setType] = useState<TxType>('DEBIT');
   const [categoryId, setCategoryId] = useState('cat_general');
   const [accountId, setAccountId] = useState(accounts.find((a) => !a.isDeleted)?.id ?? '');
+  const [linkedGoalId, setLinkedGoalId] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [aiResult, setAiResult] = useState<{ tier: string; confidence: number } | null>(null);
+  const [parseNote, setParseNote] = useState<string | null>(null);
+  const [successBanner, setSuccessBanner] = useState<string | null>(null);
   const [parsedTimestamp, setParsedTimestamp] = useState<string | null>(null);
   const [showManual, setShowManual] = useState(false);
   // Tracks a sync-queue entry created by a failed Tier 2 call during fast-log,
@@ -54,6 +64,7 @@ export default function AddTransactionScreen() {
   const bottomPad = Platform.OS === 'web' ? 34 : insets.bottom;
 
   const activeAccounts = accounts.filter((a) => !a.isDeleted);
+  const activeGoals = goals.filter((g) => !g.isDeleted);
   const expenseCategories = categories.filter((c) => c.type === 'EXPENSE');
   const incomeCategories = categories.filter((c) => c.type === 'INCOME');
 
@@ -62,34 +73,51 @@ export default function AddTransactionScreen() {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setProcessing(true);
     setParsedTimestamp(null);
+    setParseNote(null);
 
-    // Tier 1 — local
+    // Tier 1 — local, always runs first and never touches the network.
     const t1 = parseLocally(fastText, categories);
-    if (t1 && t1.confidence >= 0.7) {
-      if (t1.timestamp) setParsedTimestamp(t1.timestamp);
-      setAmount(t1.amount.toString());
-      setDescription(t1.description);
-      setType(t1.type);
-      setCategoryId(t1.categoryId);
-      setAiResult({ tier: 'On-Device', confidence: t1.confidence });
-      setShowManual(true);
-      setProcessing(false);
-      return;
-    }
-    if (t1) {
-      // Low-confidence local match — pre-fill but confirm
-      if (t1.timestamp) setParsedTimestamp(t1.timestamp);
-      setAmount(t1.amount.toString());
-      setDescription(t1.description);
-      setType(t1.type);
-      setCategoryId(t1.categoryId);
-      setAiResult({ tier: 'On-Device (low conf.)', confidence: t1.confidence });
+
+    if (!t1) {
+      // No amount anywhere in the text — Tier 1 genuinely has nothing to
+      // anchor a guess on, and without a number Tier 2 wouldn't either.
+      // Ask for manual entry instead of pretending we parsed something.
+      setDescription(fastText);
+      setParseNote("Couldn't find an amount in that — enter the details below.");
       setShowManual(true);
       setProcessing(false);
       return;
     }
 
-    // Tier 2 — OpenRouter
+    // Always pre-fill with the Tier 1 result immediately. This is the
+    // fix for "Parse with AI isn't working": the form now always ends up
+    // with a real, editable draft — amount, direction, and a category
+    // guess — rather than being left blank while waiting on a cloud call
+    // that may have nowhere to go (no backend configured).
+    if (t1.timestamp) setParsedTimestamp(t1.timestamp);
+    setAmount(t1.amount.toString());
+    setDescription(t1.description);
+    setType(t1.type);
+    setCategoryId(t1.categoryId);
+    setAiResult({ tier: 'On-Device', confidence: t1.confidence });
+    setShowManual(true);
+
+    if (t1.confidence >= 0.7) {
+      // Confident local match — done, no need to reach out to Tier 2.
+      setProcessing(false);
+      return;
+    }
+
+    // Low-confidence local guess (usually: no keyword matched a category).
+    // The pre-filled draft above is already usable — Tier 2 is only tried
+    // as a best-effort upgrade, and only if there's actually a backend to
+    // call.
+    if (!isBackendConfigured()) {
+      setParseNote('Using an on-device guess — check the category below.');
+      setProcessing(false);
+      return;
+    }
+
     try {
       const t2 = await parseWithOpenRouter(fastText, categories);
       if (t2) {
@@ -98,28 +126,26 @@ export default function AddTransactionScreen() {
         setType(t2.type);
         setCategoryId(t2.categoryId);
         setAiResult({ tier: 'OpenRouter AI', confidence: t2.confidence });
+        setParseNote(null);
         setOffline(false);
       } else {
-        // Offline fallback
         setOffline(true);
         const queued = addToSyncQueue({ rawInput: fastText, targetTier: 'TIER_2', status: 'PENDING', retryCount: 0 });
         setPendingSyncId(queued.id);
-        setAmount('');
-        setDescription(fastText);
-        setAiResult(null);
+        setParseNote("Couldn't reach the cloud AI — using the on-device guess below. We'll retry that in the background.");
       }
     } catch {
       setOffline(true);
       const queued = addToSyncQueue({ rawInput: fastText, targetTier: 'TIER_2', status: 'PENDING', retryCount: 0 });
       setPendingSyncId(queued.id);
-      setDescription(fastText);
+      setParseNote("Couldn't reach the cloud AI — using the on-device guess below. We'll retry that in the background.");
     }
 
-    setShowManual(true);
     setProcessing(false);
   };
 
   const handleSave = async () => {
+    if (saving) return;
     const amt = parseFloat(amount);
     if (!amt || amt <= 0 || !description.trim() || !accountId) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -129,6 +155,8 @@ export default function AddTransactionScreen() {
 
     const confidence = aiResult?.confidence;
     const needsConfirmation = !!confidence && confidence < 0.7;
+    const txTimestamp = parsedTimestamp ?? new Date().toISOString();
+    const goalId = type === 'DEBIT' && linkedGoalId ? linkedGoalId : undefined;
 
     addTransaction({
       accountId,
@@ -136,10 +164,11 @@ export default function AddTransactionScreen() {
       amount: amt,
       type,
       description: description.trim(),
-      timestamp: parsedTimestamp ?? new Date().toISOString(),
+      timestamp: txTimestamp,
       processedBy: aiResult ? (aiResult.tier.startsWith('On-Device') ? 'ON_DEVICE' : 'OPENROUTER') : 'MANUAL',
       confidence,
       needsConfirmation,
+      goalId,
     });
 
     // This exact input has now been saved by hand — close out its queue
@@ -154,10 +183,43 @@ export default function AddTransactionScreen() {
       words.forEach((w) => learnKeyword(w, categoryId));
     }
 
-    router.back();
-  };
+    // If this expense lands in an active budget or a linked goal, show a
+    // brief confirmation with the updated numbers before closing — this is
+    // what makes "logging a transaction updates the budget" visible in the
+    // moment, instead of something that only shows up later on another
+    // screen. Transactions with nothing to report close instantly, same as
+    // before.
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const inCurrentMonth = txTimestamp >= monthStart;
 
-  const selectedCategory = categories.find((c) => c.id === categoryId);
+    let banner: string | null = null;
+    if (type === 'DEBIT' && inCurrentMonth) {
+      const budget = budgets.find((b) => b.categoryId === categoryId);
+      if (budget) {
+        const spentAfter = getBudgetSpent(categoryId) + amt;
+        const pct = budget.monthlyLimit > 0 ? Math.round((spentAfter / budget.monthlyLimit) * 100) : 0;
+        const cat = getCategoryById(categoryId);
+        banner = `Logged to ${cat?.name ?? 'your budget'} — ${formatCurrencyAbs(spentAfter)} of ${formatCurrencyAbs(budget.monthlyLimit)} used this month (${pct}%)`;
+      }
+    }
+    if (goalId) {
+      const goal = goals.find((g) => g.id === goalId);
+      if (goal) {
+        const newAmount = goal.currentAmount + amt;
+        const goalLine = `${formatCurrencyAbs(newAmount)} of ${formatCurrencyAbs(goal.targetAmount)} saved toward "${goal.name}"`;
+        banner = banner ? `${banner}\n${goalLine}` : goalLine;
+      }
+    }
+
+    if (banner) {
+      setSaving(true);
+      setSuccessBanner(banner);
+      setTimeout(() => router.back(), 1200);
+    } else {
+      router.back();
+    }
+  };
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -177,6 +239,13 @@ export default function AddTransactionScreen() {
             <Feather name="x" size={22} color={colors.mutedForeground} />
           </TouchableOpacity>
         </View>
+
+        {successBanner && (
+          <View style={[styles.successBanner, { backgroundColor: colors.credit + '15', borderColor: colors.credit + '40' }]}>
+            <Feather name="check-circle" size={16} color={colors.credit} />
+            <Text style={[styles.successBannerText, { color: colors.credit }]}>{successBanner}</Text>
+          </View>
+        )}
 
         {/* Fast Log */}
         <View style={[styles.fastLogCard, { backgroundColor: colors.card, borderColor: colors.primary + '40' }]}>
@@ -228,6 +297,13 @@ export default function AddTransactionScreen() {
               <Text style={[styles.aiResultText, { color: colors.mutedForeground }]}>
                 {aiResult.tier} — {Math.round(aiResult.confidence * 100)}% confidence
               </Text>
+            </View>
+          )}
+
+          {parseNote && (
+            <View style={styles.parseNoteRow}>
+              <Feather name="info" size={12} color={colors.mutedForeground} />
+              <Text style={[styles.parseNoteText, { color: colors.mutedForeground }]}>{parseNote}</Text>
             </View>
           )}
         </View>
@@ -353,13 +429,60 @@ export default function AddTransactionScreen() {
           </View>
         </View>
 
+        {/* Save toward a goal (optional, expenses only) */}
+        {type === 'DEBIT' && activeGoals.length > 0 && (
+          <View style={styles.field}>
+            <Text style={[styles.label, { color: colors.mutedForeground }]}>Save toward a goal (optional)</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+              <Pressable
+                onPress={() => setLinkedGoalId(null)}
+                style={[
+                  styles.chip,
+                  {
+                    backgroundColor: linkedGoalId === null ? colors.primary + '25' : colors.card,
+                    borderColor: linkedGoalId === null ? colors.primary : colors.border,
+                  },
+                ]}
+              >
+                <Text style={[styles.chipText, { color: linkedGoalId === null ? colors.primary : colors.mutedForeground }]}>
+                  None
+                </Text>
+              </Pressable>
+              {activeGoals.map((g) => {
+                const active = linkedGoalId === g.id;
+                return (
+                  <Pressable
+                    key={g.id}
+                    onPress={() => setLinkedGoalId(g.id)}
+                    style={[
+                      styles.chip,
+                      {
+                        backgroundColor: active ? colors.primary + '25' : colors.card,
+                        borderColor: active ? colors.primary : colors.border,
+                      },
+                    ]}
+                  >
+                    <Feather name="target" size={12} color={active ? colors.primary : colors.mutedForeground} />
+                    <Text style={[styles.chipText, { color: active ? colors.primary : colors.mutedForeground }]}>
+                      {g.name}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
+
         {/* Save */}
         <TouchableOpacity
           onPress={handleSave}
-          style={[styles.saveBtn, { backgroundColor: colors.primary }]}
+          disabled={saving}
+          style={[styles.saveBtn, { backgroundColor: colors.primary, opacity: saving ? 0.7 : 1 }]}
         >
-          <Feather name="check" size={18} color={colors.primaryForeground} />
-          <Text style={[styles.saveBtnText, { color: colors.primaryForeground }]}>Save Transaction</Text>
+          <Feather name={saving ? 'check' : 'check'} size={18} color={colors.primaryForeground} />
+          <Text style={[styles.saveBtnText, { color: colors.primaryForeground }]}>
+            {saving ? 'Saved' : 'Save Transaction'}
+          </Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
@@ -373,6 +496,15 @@ const styles = StyleSheet.create({
   scroll: { padding: 18, gap: 16 },
   titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   screenTitle: { fontSize: 22, fontFamily: 'Inter_700Bold', fontWeight: '700' },
+  successBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  successBannerText: { flex: 1, fontSize: 13, fontFamily: 'Inter_500Medium', lineHeight: 18 },
   fastLogCard: { borderRadius: 14, padding: 16, borderWidth: 1, gap: 12 },
   fastLogHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   fastLogTitle: { fontSize: 14, fontFamily: 'Inter_600SemiBold', fontWeight: '600' },
@@ -403,6 +535,13 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   aiResultText: { fontSize: 12, fontFamily: 'Inter_400Regular' },
+  parseNoteRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    paddingHorizontal: 2,
+  },
+  parseNoteText: { flex: 1, fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 16 },
   dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   dividerLine: { flex: 1, height: 1 },
   dividerText: { fontSize: 12, fontFamily: 'Inter_400Regular', textTransform: 'uppercase', letterSpacing: 0.5 },
@@ -437,6 +576,9 @@ const styles = StyleSheet.create({
   },
   chips: { flexDirection: 'row', gap: 8 },
   chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import Animated, {
   useAnimatedStyle,
@@ -14,9 +14,10 @@ interface BudgetCardProps {
   budget: Budget;
   category?: Category;
   spent: number;
+  onPress?: () => void;
 }
 
-export function BudgetCard({ budget, category, spent }: BudgetCardProps) {
+export function BudgetCard({ budget, category, spent, onPress }: BudgetCardProps) {
   const colors = useColors();
   const ratio = budget.monthlyLimit > 0 ? Math.min(spent / budget.monthlyLimit, 1) : 0;
   const pct = Math.round(ratio * 100);
@@ -42,10 +43,14 @@ export function BudgetCard({ budget, category, spent }: BudgetCardProps) {
   const iconName = (category?.icon ?? 'circle') as keyof typeof Feather.glyphMap;
 
   return (
-    <View
-      style={[
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={onPress ? `Manage budget for ${category?.name ?? 'this category'}` : undefined}
+      style={({ pressed }) => [
         styles.card,
-        { backgroundColor: colors.card, borderColor: colors.border },
+        { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed && onPress ? 0.85 : 1 },
       ]}
     >
       {/* Header */}
@@ -71,6 +76,7 @@ export function BudgetCard({ budget, category, spent }: BudgetCardProps) {
           </Text>
         </View>
         <Text style={[styles.pct, { color: barColor }]}>{pct}%</Text>
+        {onPress && <Feather name="chevron-right" size={16} color={colors.mutedForeground} />}
       </View>
 
       {/* Bar */}
@@ -86,7 +92,7 @@ export function BudgetCard({ budget, category, spent }: BudgetCardProps) {
           </Text>
         </View>
       )}
-    </View>
+    </Pressable>
   );
 }
 

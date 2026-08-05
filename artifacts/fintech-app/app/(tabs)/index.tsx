@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Platform,
   Pressable,
@@ -41,6 +42,7 @@ export default function DashboardScreen() {
     goals,
     getGoalPacing,
     confirmTransaction,
+    deleteTransaction,
     accounts,
     drainSyncQueue,
     persistError,
@@ -83,6 +85,25 @@ export default function DashboardScreen() {
   const handleAddTransaction = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.push('/add-transaction');
+  };
+
+  const handleDeleteTransaction = async (txId: string, description: string) => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Alert.alert(
+      'Delete this transaction?',
+      `"${description}" will be removed and your balance will be adjusted back. This can't be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            deleteTransaction(txId);
+          },
+        },
+      ],
+    );
   };
 
   const topPadding = Platform.OS === 'web' ? 67 : insets.top;
@@ -231,7 +252,12 @@ export default function DashboardScreen() {
               contentContainerStyle={styles.goalsScroll}
             >
               {activeGoals.map((g) => (
-                <GoalCard key={g.id} goal={g} pacing={getGoalPacing(g)} />
+                <GoalCard
+                  key={g.id}
+                  goal={g}
+                  pacing={getGoalPacing(g)}
+                  onPress={() => router.push(`/add-goal?id=${g.id}`)}
+                />
               ))}
             </ScrollView>
           </View>
@@ -245,6 +271,12 @@ export default function DashboardScreen() {
               <Text style={[styles.seeAll, { color: colors.primary }]}>See all</Text>
             </TouchableOpacity>
           </View>
+
+          {recentTxs.length > 0 && (
+            <Text style={[styles.sectionHint, { color: colors.mutedForeground }]}>
+              Hold a transaction to delete it
+            </Text>
+          )}
 
           {recentTxs.length === 0 ? (
             <View style={[styles.emptyState, { borderColor: colors.border }]}>
@@ -262,7 +294,7 @@ export default function DashboardScreen() {
                 category={getCategoryById(tx.categoryId)}
                 categories={categories}
                 onConfirm={confirmTransaction}
-                onPress={() => {}}
+                onLongPress={() => handleDeleteTransaction(tx.id, tx.description)}
               />
             ))
           )}
@@ -398,6 +430,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   seeAll: { fontSize: 13, fontFamily: 'Inter_500Medium' },
+  sectionHint: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: -6 },
   goalsScroll: { paddingVertical: 2 },
   emptyState: {
     alignItems: 'center',

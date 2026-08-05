@@ -16,6 +16,7 @@ interface TransactionCardProps {
   category?: Category;
   onConfirm?: (txId: string, categoryId: string) => void;
   onPress?: () => void;
+  onLongPress?: () => void;
   showConfirmChip?: boolean;
   categories?: Category[];
 }
@@ -38,6 +39,7 @@ export function TransactionCard({
   transaction,
   category,
   onPress,
+  onLongPress,
   onConfirm,
   showConfirmChip = true,
   categories,
@@ -78,6 +80,7 @@ export function TransactionCard({
       <TouchableOpacity
         activeOpacity={0.75}
         onPress={onPress}
+        onLongPress={onLongPress}
         style={[
           styles.row,
           {

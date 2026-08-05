@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
+  Alert,
   FlatList,
   Platform,
   Pressable,
@@ -40,6 +41,25 @@ export default function TransactionsScreen() {
     () => [...new Set(activeTxs.map((t) => t.categoryId))],
     [activeTxs],
   );
+
+  const handleDeleteTransaction = async (txId: string, description: string) => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Alert.alert(
+      'Delete this transaction?',
+      `"${description}" will be removed and your balance will be adjusted back. This can't be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            deleteTransaction(txId);
+          },
+        },
+      ],
+    );
+  };
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -127,6 +147,11 @@ export default function TransactionsScreen() {
       </ScrollView>
 
       {/* List */}
+      {activeTxs.length > 0 && (
+        <Text style={[styles.listHint, { color: colors.mutedForeground }]}>
+          Hold a transaction to delete it
+        </Text>
+      )}
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
@@ -136,7 +161,7 @@ export default function TransactionsScreen() {
             category={getCategoryById(item.categoryId)}
             categories={categories}
             onConfirm={confirmTransaction}
-            onPress={() => {}}
+            onLongPress={() => handleDeleteTransaction(item.id, item.description)}
           />
         )}
         ListEmptyComponent={
@@ -187,6 +212,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   chipText: { fontSize: 12, fontFamily: 'Inter_500Medium' },
+  listHint: { fontSize: 11, fontFamily: 'Inter_400Regular', paddingHorizontal: 18, paddingBottom: 4 },
   list: { paddingHorizontal: 18, paddingTop: 10 },
   empty: {
     flex: 1,
