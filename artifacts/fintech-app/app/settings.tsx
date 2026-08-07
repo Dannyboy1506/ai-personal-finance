@@ -263,8 +263,22 @@ export default function SettingsScreen() {
           <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>AI BACKEND URL</Text>
           <Text style={[styles.backupHint, { color: colors.mutedForeground }]}>
             Where Tier 2/3 send requests. Setting this here takes effect immediately —
-            no need to rebuild the app to point at a different backend.
+            no need to rebuild the app to point at a different backend. Works with a
+            hosted server (Render, etc.) or one running locally on this phone via Termux.
           </Text>
+          <View style={styles.chipsWrap}>
+            <TouchableOpacity
+              onPress={() => setUrlInput('http://127.0.0.1:3000')}
+              style={[
+                styles.modelChip,
+                { backgroundColor: urlInput === 'http://127.0.0.1:3000' ? colors.primary + '25' : colors.elevated, borderColor: urlInput === 'http://127.0.0.1:3000' ? colors.primary : colors.border },
+              ]}
+            >
+              <Text style={[styles.modelChipText, { color: urlInput === 'http://127.0.0.1:3000' ? colors.primary : colors.mutedForeground }]}>
+                Local (Termux) — 127.0.0.1:3000
+              </Text>
+            </TouchableOpacity>
+          </View>
           <View style={styles.urlRow}>
             <TextInput
               value={urlInput}
